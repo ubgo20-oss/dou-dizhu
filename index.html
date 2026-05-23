@@ -89,7 +89,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;min-height:1
       <button class="play-btn" id="playBtn" onclick="playCards()">出牌</button>
     </div>
     <div class="bid-area" id="bidArea">
-      <button class="bid-btn pass" onclick(playerBid=false)>不叫</button>
+      <button class="bid-btn pass" onclick="playerBid(0)">不叫</button>
       <button class="bid-btn" onclick="playerBid(3)">3分</button>
       <button class="bid-btn" onclick="playerBid(2)">2分</button>
       <button class="bid-btn" onclick="playerBid(1)">1分</button>
@@ -272,12 +272,11 @@ function startBidding(){
 
 function nextBid(){
   if(state.passCount>=2&&state.bid>0){
-    // Landlord decided
     state.landlord=state.bidder;
     assignDizhu();
     return;
   }
-  if(state.bid>0&&state.passCount>=2){
+  if(state.passCount>=3){
     state.landlord=state.bidder;
     assignDizhu();
     return;
@@ -359,32 +358,18 @@ function assignDizhu(){
   state.phase='play';
   let l=state.landlord;
   state.hands[l]=sortCards([...state.hands[l],...state.dizhuCards]);
-  state.currentPlayer=0;
+  state.currentPlayer=l;
   state.lastPlay=null;
   state.lastPlayer=-1;
   document.getElementById('msg').textContent='地主是 '+(l===0?'你':'電腦 '+(l===1?'2':'1'));
   renderAll();
   setTimeout(()=>{
-    document.getElementById('msg').textContent='遊戲開始！';
-    if(state.currentPlayer!==0)setTimeout(aiTurn,600);
+    document.getElementById('msg').textContent='地主先出牌！';
+    if(state.currentPlayer!==0)setTimeout(aiTurn,800);
   },800);
 }
 
 // ====== Play Phase ======
-function getCurrentPlay(){return state.lastPlay;}
-function getCurrentPlayer(){return state.currentPlayer;}
-
-function startPlay(){
-  state.phase='play';
-  //地主先出
-  state.currentPlayer=state.landlord;
-  state.lastPlay=null;
-  state.lastPlayer=-1;
-  document.getElementById('msg').textContent='地主先出牌';
-  renderAll();
-  if(state.currentPlayer!==0)setTimeout(aiTurn,800);
-}
-
 function playCards(){
   let sel=getSelected();
   if(!sel||sel.length===0){document.getElementById('msg').textContent='請選擇要出的牌';return;}
