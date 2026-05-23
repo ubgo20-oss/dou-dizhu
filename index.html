@@ -470,7 +470,9 @@ function aiTurn(){
 
 function findSmallestPlay(hand){
   let g=groupByVal(hand);
-  // single
+  // Prefer pair over single
+  let pair=g.find(x=>x.cards.length>=2);
+  if(pair)return{cards:pair.cards.slice(0,2),comb:{type:'pair',rank:pair.val,len:2}};
   if(hand.length>0)return{cards:[hand[0]],comb:{type:'single',rank:hand[0].val,len:1}};
   return null;
 }
@@ -532,11 +534,17 @@ function chooseAIMove(hand,mustBeat,player){
   plays.sort((a,b)=>a.priority-b.priority);
   
   if(!mustBeat){
-    // Leading: play smallest
-    plays.sort((a,b)=>a.priority-b.priority);
-    // Prefer singles/pairs when leading
-    let candidates=plays.filter(p=>p.comb.type==='single'||p.comb.type==='pair'||p.comb.type==='three1');
-    if(candidates.length>0)return candidates[0];
+    // Leading: prefer combos that use more cards
+    let byType={};
+    for(let p of plays){if(!byType[p.comb.type])byType[p.comb.type]=[];byType[p.comb.type].push(p);}
+    // Priority order: straight > consecPairs > three2 > three1 > pair > single
+    let order=['straight','consecPairs','plane','plane1','plane2','three2','four2','four22','three1','pair','three','single'];
+    for(let t of order){
+      if(byType[t]&&byType[t].length>0){
+        byType[t].sort((a,b)=>b.comb.len-a.comb.len||a.priority-b.priority);
+        return byType[t][0];
+      }
+    }
     return plays[0];
   }
   
