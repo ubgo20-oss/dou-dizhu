@@ -89,10 +89,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;min-height:1
       <button class="play-btn" id="playBtn" onclick="playCards()">出牌</button>
     </div>
     <div class="bid-area" id="bidArea">
-      <button class="bid-btn pass" onclick="playerBid(0)">不叫</button>
-      <button class="bid-btn" onclick="playerBid(3)">3分</button>
-      <button class="bid-btn" onclick="playerBid(2)">2分</button>
-      <button class="bid-btn" onclick="playerBid(1)">1分</button>
+      <button class="bid-btn pass" id="bidPassBtn" onclick="playerBid(0)">不叫</button>
+      <button class="bid-btn" id="bid3Btn" onclick="playerBid(3)">3分</button>
+      <button class="bid-btn" id="bid2Btn" onclick="playerBid(2)">2分</button>
+      <button class="bid-btn" id="bid1Btn" onclick="playerBid(1)">1分</button>
     </div>
   </div>
   <div class="msg small" id="lastPlay"></div>
@@ -277,8 +277,9 @@ function nextBid(){
     return;
   }
   if(state.passCount>=3){
-    state.landlord=state.bidder;
-    assignDizhu();
+    document.getElementById('msg').textContent='都沒叫，重新發牌';
+    renderAll();
+    setTimeout(initGame,1200);
     return;
   }
   let p=state.bidder;
@@ -286,6 +287,11 @@ function nextBid(){
   if(p===0){
     // Player's turn
     document.getElementById('bidArea').classList.remove('hidden');
+    ['bid1Btn','bid2Btn','bid3Btn'].forEach(id=>{
+      let btn=document.getElementById(id);
+      let val=+btn.textContent.replace('分','');
+      btn.style.display=val>state.bid?'':'none';
+    });
     document.getElementById('msg').textContent='輪到你叫地主';
   } else {
     aiBid(p);
@@ -294,11 +300,12 @@ function nextBid(){
 
 function playerBid(score){
   document.getElementById('bidArea').classList.add('hidden');
-  if(score===0){
+  if(score<=0){
     state.passCount++;
     document.getElementById('msg').textContent='你不叫';
     setTimeout(()=>{state.bidder=(state.bidder+1)%3;nextBid();},600);
   } else {
+    if(score<=state.bid){document.getElementById('msg').textContent='必須叫比 '+state.bid+' 分高';document.getElementById('bidArea').classList.remove('hidden');return;}
     state.passCount=0;
     state.bid=score;
     state.bidder=0;
@@ -335,7 +342,7 @@ function aiBid(p){
     }
     setTimeout(()=>{
       if(state.passCount>=2&&state.bid>0){state.landlord=state.bidder;assignDizhu();return;}
-      if(state.passCount>=3){state.landlord=p;assignDizhu();return;}
+      if(state.passCount>=3){document.getElementById('msg').textContent='都沒叫，重新發牌';renderAll();setTimeout(initGame,1200);return;}
       state.bidder=(p+1)%3;
       nextBid();
     },400);
@@ -365,7 +372,8 @@ function assignDizhu(){
   renderAll();
   setTimeout(()=>{
     document.getElementById('msg').textContent='地主先出牌！';
-    if(state.currentPlayer!==0)setTimeout(aiTurn,800);
+    if(state.currentPlayer===0)enablePlay();
+    else setTimeout(aiTurn,800);
   },800);
 }
 
@@ -411,12 +419,7 @@ function passTurn(){
   if(state.lastPlayer===-1||state.lastPlayer===0){
     document.getElementById('msg').textContent='必須出牌';return;
   }
-  let np=(state.currentPlayer+1)%3;
-  if(np===state.lastPlayer){
-    // Other two passed, must play
-    document.getElementById('msg').textContent='輪到你必須出牌';return;
-  }
-  state.currentPlayer=np;
+  state.currentPlayer=(state.currentPlayer+1)%3;
   document.getElementById('msg').textContent='你不出';
   document.getElementById('playActions').classList.add('hidden');
   renderAll();
@@ -474,9 +477,8 @@ function findSmallestPlay(hand){
 
 function chooseAIMove(hand,mustBeat,player){
   let g=groupByVal(hand);
-  let isLandlord=player===state.landlord;
   
-  // Priority: find a valid play
+  // Collect all possible combinations
   let plays=[];
   
   // Collect all possible combinations
@@ -500,6 +502,31 @@ function chooseAIMove(hand,mustBeat,player){
   // Rocket
   let jokers=hand.filter(c=>c.val>=13);
   if(jokers.length===2)plays.push({cards:jokers,comb:{type:'rocket',rank:14,len:2},priority:99});
+  // Straight (5+)
+  let all=g.map(x=>x.val);
+  for(let len=5;len<=12;len++){
+    for(let start=0;start<=12-len;start++){
+      let ok=true,vals=[];
+      for(let i=0;i<len;i++){let v=start+i;if(!all.includes(v)||v>10){ok=false;break;}vals.push(v);}
+      if(ok){
+        let cards=vals.map(v=>g.find(x=>x.val===v).cards[0]);
+        plays.push({cards,comb:{type:'straight',rank:vals[vals.length-1],len},priority:start+5});
+      }
+    }
+  }
+  // Consecutive pairs (3+)
+  let pairs=g.filter(x=>x.cards.length>=2).map(x=>x.val);
+  for(let cnt=3;cnt<=6;cnt++){
+    for(let start=0;start<=12-cnt;start++){
+      let ok=true,vals=[];
+      for(let i=0;i<cnt;i++){let v=start+i;if(!pairs.includes(v)||v>10){ok=false;break;}vals.push(v);}
+      if(ok){
+        let cards=[];
+        vals.forEach(v=>{let c=g.find(x=>x.val===v);cards.push(c.cards[0],c.cards[1]);});
+        plays.push({cards,comb:{type:'consecPairs',rank:vals[vals.length-1],len:cards.length,count:cnt},priority:start+10});
+      }
+    }
+  }
   
   // Sort by priority (lower = better to play first normally)
   plays.sort((a,b)=>a.priority-b.priority);
